@@ -7,9 +7,14 @@
 //
 
 #include <iostream>
+#include <opencv2/opencv.hpp>
 
-int main(int argc, const char * argv[]) {
-    // insert code here...
-    std::cout << "Hello, World!\n";
+using namespace std;
+using namespace cv;
+
+int main(int argc, const char * argv[])
+{
+    
+    
     return 0;
 }
