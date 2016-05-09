@@ -13,72 +13,126 @@ using namespace std;
 using namespace cv;
 
 
-int D = 10, T = 20, w1 = 0.5, w2 = 0.5;
+int D = 50, T = 20, w1 = 0.3, w2 = 1 - w1;
 
+Mat getHistImg(const MatND& hist)
+{
+    double maxVal=0;
+    double minVal=0;
+    
+    //找到直方图中的最大值和最小值
+    minMaxLoc(hist,&minVal,&maxVal,0,0);
+    int histSize=hist.rows;
+    Mat histImg(histSize,histSize,CV_8U,Scalar(255));
+    // 设置最大峰值为图像高度的90%
+    int hpt=static_cast<int>(0.9*histSize);
+    
+    for(int h=0;h<histSize;h++)
+    {
+        float binVal=hist.at<float>(h);
+        int intensity=static_cast<int>(binVal*hpt/maxVal);
+        line(histImg,Point(h,histSize),Point(h,histSize-intensity),Scalar::all(0));
+    }
+    
+    return histImg;
+}
 
 int main(int argc, const char * argv[])
 {
-    Mat F, CB;
+    Mat F, CB, DM;
     
-    VideoCapture video_capture("ellipse_slow.mov");
+    VideoCapture video_capture("move.mpeg");
     
     //首先采用视频序列第 1 帧图像 F0 作为初始背景
     video_capture >> F;
     
-    cvtColor(F, CB, CV_BGR2GRAY);
+    //cvtColor(F, CB, CV_BGR2GRAY);
+    F.copyTo(CB);
     
     Mat Q = Mat::ones(video_capture.get(CV_CAP_PROP_FRAME_HEIGHT), video_capture.get(CV_CAP_PROP_FRAME_WIDTH), CV_16UC1);
     
     Mat BT(video_capture.get(CV_CAP_PROP_FRAME_HEIGHT), video_capture.get(CV_CAP_PROP_FRAME_WIDTH), CV_8UC1);
     
     
-    VideoWriter writer("tracking_result.mov",
-                       video_capture.get(CV_CAP_PROP_FOURCC),
-                       video_capture.get(CV_CAP_PROP_FPS),
-                       Size(video_capture.get(CV_CAP_PROP_FRAME_WIDTH),
-                            video_capture.get(CV_CAP_PROP_FRAME_HEIGHT))
-                       );
-    
-    //cout << video_capture.get(CV_CAP_PROP_FPS) << endl;
-    
     while (true) {
         
         if (!video_capture.read(F))
             break;
         
-        cvtColor(F, F, CV_BGR2GRAY);
+        //cvtColor(F, F, CV_BGR2GRAY);
+        
+        imshow("F", F);
+        
+        imshow("image", CB);
+        
         
         //BT and Q
+        Mat tmp = abs(F - CB);
+        cvtColor(tmp, tmp, CV_BGR2GRAY);
+        
+        threshold(tmp, BT, D, 255, THRESH_BINARY);
+        
         for (int i = 0; i < BT.rows; ++i) {
             for (int j = 0; j < BT.cols; ++j) {
-                if (fabs(F.at<uint8_t>(i, j) - CB.at<uint8_t>(i, j)) > D) {
-                    BT.at<uint8_t>(i, j) = 255;
-                    ++Q.at<uint16_t>(i, j);
-                }
-                else
-                    BT.at<uint8_t>(i, j) = 0;
+                
+                int r = F.at<Vec3b>(i, j)[0] - CB.at<Vec3b>(i, j)[0];
+                int g = F.at<Vec3b>(i, j)[1] - CB.at<Vec3b>(i, j)[1];
+                int b = F.at<Vec3b>(i, j)[2] - CB.at<Vec3b>(i, j)[2];
+                
+                if (r * r + g * g + b * b > D * D)
+                    Q.at<uint16_t>(i, j)++;
+                
             }
         }
         
         //CB
         for (int i = 0; i < CB.rows; ++i) {
             for (int j = 0; j < CB.cols; ++j) {
+                
                 if (BT.at<uint8_t>(i, j) == 255) {
                     if (Q.at<uint16_t>(i, j) > T)
-                        CB.at<uint8_t>(i, j) = F.at<uint8_t>(i, j);
+                        CB.at<Vec3b>(i, j) = F.at<Vec3b>(i, j);
                 }
                 else
-                    CB.at<uint8_t>(i, j) = w1 * CB.at<uint8_t>(i, j) + w2 * F.at<uint8_t>(i, j);
+                    CB.at<Vec3b>(i, j) = w1 * CB.at<Vec3b>(i, j) + w2 * F.at<Vec3b>(i, j);
+                
             }
         }
         
-        //imshow("image", CB);
-        writer << CB;
+        //calculate Hist
+        const int channels[1]={0};
+        const int histSize[1]={256};
+        float hranges[2]={0,255};
+        const float* ranges[1]={hranges};
+        MatND hist;
+        Mat tmpgray;
+        cvtColor(F, tmpgray, CV_BGR2GRAY);
+        calcHist(&tmpgray, 1, channels, Mat(), hist, 1, histSize, ranges);
         
-        //waitKey(1000 / video_capture.get(CV_CAP_PROP_FPS));
+        imshow("Hist", getHistImg(hist));
         
+        
+        //binary
+        DM = abs(F - CB);
+        
+        Mat BDK;
+        cvtColor(DM, DM, CV_BGR2GRAY);
+        
+        int thre = 140;
+        threshold(DM, BDK, thre, 255, THRESH_BINARY);
+        
+        imshow("Object", BDK);
+        
+        waitKey();
     }
-
+    
     
     return 0;
 }
+
+
+
+
+
+
+
