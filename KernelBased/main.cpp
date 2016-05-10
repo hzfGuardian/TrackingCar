@@ -118,7 +118,7 @@ int main(int argc, const char * argv[])
         Mat BDK;
         cvtColor(DM, DM, CV_BGR2GRAY);
         
-        int thre = 140;
+        int thre = 60;
         threshold(DM, BDK, thre, 255, THRESH_BINARY);
         
         imshow("Object", BDK);
